@@ -1,0 +1,464 @@
+﻿version 15.1X53-D60.4;
+system {
+    host-name spine2;
+<output omitted>
+interfaces {
+    xe-0/0/2 {
+        description "leaf1 0/0/1";
+        mtu 9192;
+        unit 0 {
+            family inet {
+                mtu 9000;
+                address 172.16.0.18/31;
+            }
+        }
+    }
+    xe-0/0/3 {
+        description "leaf2 0/0/1";
+        mtu 9192;
+        unit 0 {
+            family inet {
+                mtu 9000;
+                address 172.16.0.20/31;
+            }
+        }
+    }
+    xe-0/0/5 {
+        description "spine1 0/0/5";
+        mtu 9192;
+        unit 0 {
+            family inet {
+                mtu 9000;
+                address 172.16.0.41/31;
+            }
+        }
+    }
+    em0 {
+        unit 0 {
+            family inet {
+                address 192.168.10.55/24;
+            }
+        }
+    }
+    protect: em1 {
+        unit 0 {
+            family inet {
+                address 169.254.0.2/24;
+            }
+        }
+    }
+    irb {
+        unit 101 {
+            description " * T1 - vlan 101 - vni 101 ";
+            proxy-arp;
+            family inet {
+                address 192.168.11.253/24 {
+                    virtual-gateway-address 192.168.11.254;
+                }
+            }
+        }
+        unit 102 {
+            description " * T1 - vlan 102 - vni 102 ";
+            proxy-arp;
+            family inet {
+                address 192.168.12.253/24 {
+                    virtual-gateway-address 192.168.12.254;
+                }
+            }
+        }
+        unit 201 {
+            description " * T2 - vlan 201 - vni 201 ";
+            family inet {
+                address 192.168.21.253/24 {
+                    virtual-gateway-address 192.168.21.254;
+                }
+            }
+        }
+        unit 202 {
+            description " * T2 - vlan 202 - vni 202 ";
+            family inet {
+                address 192.168.22.253/24 {
+                    virtual-gateway-address 192.168.22.254;
+                }
+            }
+        }
+        unit 301 {
+            description " * T3 - vlan 301 - vni 301 ";
+            proxy-arp;
+            family inet {
+                address 192.168.31.253/24 {
+                    virtual-gateway-address 192.168.31.254;
+                }
+            }
+        }
+        unit 308 {
+            description " * T3 - vlan 308 - vni 308 ";
+            proxy-arp;
+            family inet {
+                address 192.168.38.253/24 {
+                    virtual-gateway-address 192.168.38.254;
+                }
+            }
+        }
+    }
+    lo0 {
+        unit 0 {
+            family inet {
+                address 10.0.255.2/32;
+            }
+        }
+        unit 10 {
+            description "T1 loopback";
+            family inet {
+                address 10.10.255.2/32;
+            }
+        }
+        unit 20 {
+            description "T2 loopback";
+            family inet {
+                address 10.20.255.2/32;
+            }
+        }
+        unit 30 {
+            description "T3 loopback";
+            family inet {
+                address 10.30.255.2/32;
+            }
+        }
+    }
+}
+forwarding-options {
+    storm-control-profiles default {
+        all;
+    }
+}
+routing-options {
+    router-id 10.0.255.2;
+    autonomous-system 65104;
+    forwarding-table {
+        export pfe-ecmp;
+        ecmp-fast-reroute;
+    }
+}
+protocols {
+    bgp {
+        log-updown;
+        graceful-restart;
+        inactive: bfd-liveness-detection {
+            minimum-interval 350;
+            multiplier 3;
+            session-mode automatic;
+        }
+        group underlay-ipfabric {
+            type external;
+            mtu-discovery;
+            import bgp-ipclos-in;
+            export bgp-ipclos-out;
+            local-as 65104;
+            multipath multiple-as;
+            neighbor 172.16.0.19 {
+                description leaf1;
+                peer-as 65105;
+                inactive: bfd-liveness-detection {
+                    minimum-interval 350;
+                    multiplier 3;
+                    session-mode automatic;
+                }
+            }
+            neighbor 172.16.0.21 {
+                description leaf2;
+                peer-as 65106;
+                inactive: bfd-liveness-detection {
+                    minimum-interval 350;
+                    multiplier 3;
+                    session-mode automatic;
+                }
+            }
+            inactive: neighbor 172.16.0.8 {
+                description vmx1;
+                peer-as 65101;
+            }
+            inactive: neighbor 172.16.0.12 {
+                description vmx2;
+                peer-as 65102;
+            }
+            neighbor 172.16.0.40 {
+                description spine1;
+                peer-as 65103;
+            }
+        }
+        group overlay-evpn-rr {
+            type internal;
+            local-address 10.0.255.2;
+            family evpn {
+                signaling;
+            }
+            export no-type5;
+            vpn-apply-export;
+            cluster 1.1.1.1;
+            local-as 65001;
+            multipath;
+            neighbor 10.0.255.3;
+            neighbor 10.0.255.4;
+        }
+        group overlay-evpn {
+            type internal;
+            local-address 10.0.255.2;
+            family evpn {
+                signaling;
+            }
+            local-as 65001;
+            multipath;
+            neighbor 10.0.255.1;
+        }
+        group dci-underlay {
+            type external;
+            mtu-discovery;
+            import bgp-ipclos-in;
+            export bgp-ipclos-out;
+            local-as 65104;
+            neighbor 172.16.99.3 {
+                peer-as 65204;
+            }
+        }
+        group dci-overlay-evpn {
+            type external;
+            multihop;
+            local-address 10.0.255.2;
+            family evpn {
+                signaling;
+            }
+            local-as 65104;
+            neighbor 10.0.255.6 {
+                peer-as 65204;
+            }
+        }
+    }
+    evpn {
+        encapsulation vxlan;
+        extended-vni-list [ 101 102 201 202 301 308 ];
+        multicast-mode ingress-replication;
+        default-gateway no-gateway-community;
+        vni-options {
+            vni 101 {
+                vrf-target export target:1:101;
+            }
+            vni 102 {
+                vrf-target export target:1:102;
+            }
+            vni 201 {
+                vrf-target export target:1:201;
+            }
+            vni 202 {
+                vrf-target export target:1:202;
+            }
+            vni 301 {
+                vrf-target export target:1:301;
+            }
+            vni 308 {
+                vrf-target export target:1:308;
+            }
+        }
+    }
+    lldp {
+        interface all;
+        interface em0 {
+            disable;
+        }
+    }
+    igmp-snooping {
+        vlan default;
+    }
+}
+policy-options {
+    policy-statement LEAF-IN {
+        term import_T1-1 {
+            from community T1-1;
+            then accept;
+        }
+        term import_T1-2 {
+            from community T1-2;
+            then accept;
+        }
+        term import_T2-1 {
+            from community T2-1;
+            then accept;
+        }
+        term import_T2-2 {
+            from community T2-2;
+            then accept;
+        }
+        term import_T3-1 {
+            from community T3-1;
+            then accept;
+        }
+        term import_T3-8 {
+            from community T3-8;
+            then accept;
+        }
+        term import_leaf-esi {
+            from community leaf-esi;
+            then accept;
+        }
+        term last {
+            then reject;
+        }
+    }
+    policy-statement bgp-ipclos-in {
+        term loopbacks {
+            from {
+                route-filter 10.0.255.0/24 orlonger;
+            }
+            then accept;
+        }
+        term reject {
+            then reject;
+        }
+    }
+    policy-statement bgp-ipclos-out {
+        term loopback {
+            from {
+                family inet;
+                protocol direct;
+                route-filter 0.0.0.0/0 prefix-length-range /32-/32;
+            }
+            then {
+                community add MYCOMMUNITY;
+                next-hop self;
+                accept;
+            }
+        }
+        term reject {
+            then reject;
+        }
+        term as-path {
+            from {
+                as-path asPathLength2;
+                community MYCOMMUNITY;
+            }
+            then reject;
+        }
+    }
+    policy-statement no-type5 {
+        term 1 {
+            from {
+                family evpn;
+                nlri-route-type 5;
+            }
+            then reject;
+        }
+        term last {
+            then accept;
+        }
+    }
+    policy-statement pfe-ecmp {
+        term 1 {
+            then {
+                load-balance per-packet;
+            }
+        }
+    }
+    community MYCOMMUNITY members target:65001:222;
+    community T1-1 members target:1:101;
+    community T1-2 members target:1:102;
+    community T2-1 members target:1:201;
+    community T2-2 members target:1:202;
+    community T3-1 members target:1:301;
+    community T3-8 members target:1:308;
+    community leaf-esi members target:9999:9999;
+    as-path asPathLength2 ".{2,}";
+}
+routing-instances {
+    TENANT_1_VRF {
+        instance-type vrf;
+        interface irb.101;
+        interface irb.102;
+        interface lo0.10;
+        route-distinguisher 10.0.255.2:10;
+        vrf-target target:1:100;
+        protocols {
+            evpn {
+                ip-prefix-routes {
+                    advertise direct-nexthop;
+                    encapsulation vxlan;
+                    vni 5000;
+                }
+            }
+        }
+    }
+    TENANT_2_VRF {
+        instance-type vrf;
+        interface irb.201;
+        interface irb.202;
+        interface lo0.20;
+        route-distinguisher 10.0.255.2:20;
+        vrf-target target:1:200;
+    }
+    TENANT_3_VRF {
+        instance-type vrf;
+        interface irb.301;
+        interface irb.308;
+        interface lo0.30;
+        route-distinguisher 10.0.255.2:30;
+        vrf-target target:1:300;
+    }
+}
+switch-options {
+    vtep-source-interface lo0.0;
+    route-distinguisher 10.0.255.2:1;
+    vrf-import LEAF-IN;
+    vrf-target target:9999:9999;
+}
+vlans {
+    T1-1 {
+        vlan-id 101;
+        l3-interface irb.101;
+        vxlan {
+            vni 101;
+            ingress-node-replication;
+        }
+    }
+    T1-2 {
+        vlan-id 102;
+        l3-interface irb.102;
+        vxlan {
+            vni 102;
+            ingress-node-replication;
+        }
+    }
+    T2-1 {
+        vlan-id 201;
+        l3-interface irb.201;
+        vxlan {
+            vni 201;
+            ingress-node-replication;
+        }
+    }
+    T2-2 {
+        vlan-id 202;
+        l3-interface irb.202;
+        vxlan {
+            vni 202;
+            ingress-node-replication;
+        }
+    }
+    T3-1 {
+        vlan-id 301;
+        l3-interface irb.301;
+        vxlan {
+            vni 301;
+            ingress-node-replication;
+        }
+    }
+    T3-8 {
+        vlan-id 308;
+        l3-interface irb.308;
+        vxlan {
+            vni 308;
+            ingress-node-replication;
+        }
+    }
+    default {
+        vlan-id 1;
+    }
+}
